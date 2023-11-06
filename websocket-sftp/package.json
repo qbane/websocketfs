@@ -42,7 +42,6 @@
   ],
   "dependencies": {
     "@wwa/statvfs": "^1.1.17",
-    "awaiting": "^3.0.0",
     "debug": "^4.3.4",
     "port-get": "^1.0.0",
     "ws": "^8.13.0"

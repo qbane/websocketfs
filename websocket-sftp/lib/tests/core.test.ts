@@ -5,7 +5,6 @@ import { Client, IItem, IStats, Server } from "../sftp";
 import { SftpFlags } from "../sftp-misc";
 import getPort from "port-get";
 import { dir as createTmpDir } from "tmp-promise";
-import { callback } from "awaiting";
 
 let tmpdir;
 let tmp: string;
@@ -85,7 +84,9 @@ beforeAll(async () => {
     port,
     virtualRoot: tmp,
   });
-  await callback(initClient);
+  await new Promise<void>((resolve, reject) => {
+    initClient((err: Error | null) => err ? reject(err) : resolve())
+  })
 });
 
 afterAll(async () => {

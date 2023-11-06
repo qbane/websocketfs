@@ -12,7 +12,6 @@ import { FileUtil } from "./fs-misc";
 import crypto from "crypto";
 import { MAX_WRITE_BLOCK_LENGTH } from "./sftp-client";
 import debug from "debug";
-import { callback } from "awaiting";
 
 const log = debug("websocketfs:fs-fsafe");
 
@@ -188,13 +187,17 @@ export class SafeFilesystem implements IFilesystem {
     }
 
     log("fs-safe: end - closing all open file handles");
-    const close = this.fs.close.bind(this.fs);
+    const close: typeof this.fs.close = this.fs.close.bind(this.fs);
     for (let handle = 1; handle <= SafeFilesystem.MAX_HANDLE_COUNT; handle++) {
       const handleInfo = this.toHandleInfo(handle);
       if (handleInfo && handleInfo.real !== null) {
         try {
           log("fs-safe: close ", handleInfo.real);
-          await callback(close, handleInfo.real);
+          await new Promise<void>((resolve, reject) => {
+            close(handleInfo.real, (err: Error) => {
+              err ? reject(err) : resolve()
+            })
+          })
         } catch (err) {
           log("end: error closing one file handle", err);
         }
