@@ -1,8 +1,8 @@
 /** @type {import('ts-jest').JestConfigWithTsJest} */
-module.exports = {
+export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: [
-    '<rootDir>/lib/**/?(*.)+(spec|test).[jt]s',
+    '**/?(*.)+(spec|test).[jt]s',
   ],
 }

@@ -2,6 +2,7 @@
   "name": "@qbane/websocket-sftp",
   "version": "0.7.2",
   "description": "The sftp protocol, over a WebSocket",
+  "type": "module",
   "main": "./dist/lib/sftp.js",
   "exports": {
     ".": "./dist/lib/sftp.js",
@@ -13,8 +14,9 @@
     "build": "pnpm exec tsc",
     "clean": "rm -rf dist node_modules",
     "prettier-all": "pnpm exec prettier -w .",
-    "test": "pnpm exec jest",
-    "test-all": "pnpm clean && pnpm install && pnpm build && pnpm test dist"
+    "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test-lib": "pnpm run test $PWD/lib",
+    "test-all": "pnpm clean && pnpm install && pnpm build && pnpm run test"
   },
   "files": [
     "dist/**",
