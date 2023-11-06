@@ -12,7 +12,7 @@ let tmp: string;
 
 async function initTmp() {
   tmpdir = await createTmpDir({ unsafeCleanup: true });
-  tmp = tmpdir.path;
+  tmp = fs.realpathSync(tmpdir.path);
   fs.writeFileSync(Path.join(tmp, "readme.txt"), "This is a readme file.");
   fs.writeFileSync(Path.join(tmp, "sample.txt"), "This is a sample file.");
   fs.mkdirSync(Path.join(tmp, "empty"));
@@ -209,8 +209,8 @@ describe("Basic Tests", function () {
       (err, resolvedPath) =>
         check(err, done, () => {
           assert.equal(
-            "/full/file0-quite-long-name.txt",
             resolvedPath,
+            "/full/file0-quite-long-name.txt",
             "Unexpected resolved path",
           );
           done();
