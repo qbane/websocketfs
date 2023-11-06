@@ -56,6 +56,9 @@ importers:
       '@isaacs/ttlcache':
         specifier: ^1.4.1
         version: 1.4.1
+      '@qbane/websocket-sftp':
+        specifier: workspace:*
+        version: link:../websocket-sftp
       awaiting:
         specifier: ^3.0.0
         version: 3.0.0
@@ -68,9 +71,6 @@ importers:
       port-get:
         specifier: ^1.0.0
         version: 1.0.0
-      websocket-sftp:
-        specifier: workspace:*
-        version: link:../websocket-sftp
     devDependencies:
       '@types/jest':
         specifier: ^29.5.3

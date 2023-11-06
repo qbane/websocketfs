@@ -1,5 +1,5 @@
 {
-  "name": "websocket-sftp",
+  "name": "@qbane/websocket-sftp",
   "version": "0.7.2",
   "description": "The sftp protocol, over a WebSocket",
   "main": "./dist/lib/sftp.js",
