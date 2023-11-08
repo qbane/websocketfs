@@ -149,8 +149,16 @@ export class SftpExtensions {
   public static SYMLINK_ORDER = "symlink-order@rjk.greenend.org.uk";
   public static LINK_ORDER = "link-order@rjk.greenend.org.uk";
 
+  static {
+    for (var name in SftpExtensions) {
+      if (SftpExtensions.hasOwnProperty(name)) {
+        SftpExtensions["_supports_" + SftpExtensions[name]] = true;
+      }
+    }
+  }
+
   static isKnown(name: string): boolean {
-    return SftpExtensions.hasOwnProperty("_" + name);
+    return SftpExtensions.hasOwnProperty("_supports_" + name);
   }
 
   static contains(values: string, value: string): boolean {

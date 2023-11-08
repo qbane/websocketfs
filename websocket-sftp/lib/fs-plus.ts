@@ -1,10 +1,10 @@
+import { IEventEmitter, EventEmitter } from "./compat";
 import { IFilesystem, IItem, IStats, RenameFlags } from "./fs-api";
 import {
   IDataSource,
   IDataTarget,
   FileUtil,
   Path,
-  IEventEmitter,
 } from "./fs-misc";
 import { FileDataSource, toDataSource } from "./fs-sources";
 import {
@@ -13,7 +13,6 @@ import {
   BufferDataTarget,
 } from "./fs-targets";
 import { search, ISearchOptionsExt, ISearchOptions } from "./fs-glob";
-import { EventEmitter } from "events";
 import type { SftpHandle } from "./sftp-client";
 
 export interface Task<T> extends Promise<T> {
@@ -30,12 +29,11 @@ export interface IFilesystemExt extends FilesystemPlus {}
 export class FilesystemPlus extends EventEmitter implements IFilesystem {
   protected _fs: IFilesystem;
   protected _local: IFilesystem;
-  protected _promise;
 
-  constructor(fs: IFilesystem, local: IFilesystem) {
+  constructor(fs: IFilesystem, local?: IFilesystem) {
     super();
     this._fs = fs;
-    this._local = local;
+    this._local = local as IFilesystem;
   }
 
   open(
@@ -716,7 +714,7 @@ export class FilesystemPlus extends EventEmitter implements IFilesystem {
           if (error) {
             if (emitter) {
               let err = error;
-              if (EventEmitter.listenerCount(task, "error")) {
+              if (task.listenerCount("error") > 0) {
                 emitter.emit("error", err);
                 err = null;
               }
@@ -745,7 +743,7 @@ export class FilesystemPlus extends EventEmitter implements IFilesystem {
                   arguments[0] = "success";
                   emitter.emit.apply(task, arguments);
 
-                  if (EventEmitter.listenerCount(task, "finish") > 0) {
+                  if (task.listenerCount("finish") > 0) {
                     arguments[0] = "finish";
                     Array.prototype.splice.call(arguments, 1, 0, null);
                     emitter.emit.apply(task, arguments);
@@ -762,8 +760,7 @@ export class FilesystemPlus extends EventEmitter implements IFilesystem {
       }
     }
 
-    const promise = this._promise ?? Promise;
-    const task = <any>new promise(executor);
+    const task = <any>new Promise(executor);
 
     task.on = on;
     task.once = once;

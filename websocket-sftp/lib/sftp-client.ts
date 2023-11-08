@@ -1020,7 +1020,7 @@ class SftpClientCore implements IFilesystem {
 
     const handle = response.readData(true);
 
-    callback(null, new SftpHandle(handle, this));
+    callback(null, new SftpHandle(handle as Buffer, this));
   }
 
   private parsePath(
@@ -1045,12 +1045,12 @@ class SftpClientCore implements IFilesystem {
     response: SftpResponse,
     callback: (
       err: Error | null,
-      buffer: Buffer | null,
+      buffer: Uint8Array | null,
       bytesRead: number,
     ) => any,
     retries: number,
-    h: Buffer,
-    buffer: Buffer,
+    h: Uint8Array,
+    buffer: Uint8Array,
     offset: number,
     length: number,
     position: number,
@@ -1118,7 +1118,7 @@ class SftpClientCore implements IFilesystem {
     if (!buffer) {
       buffer = data;
     } else {
-      data.copy(buffer, offset, 0, length);
+      buffer.set(data, offset);
     }
 
     callback(null, buffer, length);
@@ -1155,7 +1155,7 @@ class SftpClientCore implements IFilesystem {
 
   private parseHash(
     response: SftpResponse,
-    callback: (err: Error | null, hashes: Buffer, alg: string) => any,
+    callback: (err: Error | null, hashes: Uint8Array, alg: string) => any,
   ): void {
     if (!this.checkResponse(response, SftpPacketType.EXTENDED_REPLY, callback))
       return;
@@ -1188,9 +1188,9 @@ export interface ISftpClientEvents<T> {
 export class SftpClient extends FilesystemPlus {
   private _bound: boolean = false;
 
-  constructor(local: IFilesystem) {
+  constructor(local: IFilesystem | null) {
     const sftp = new SftpClientCore();
-    super(sftp, local);
+    super(sftp, local ?? undefined);
   }
 
   getChannelStats(): {} {

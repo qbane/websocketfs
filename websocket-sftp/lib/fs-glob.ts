@@ -1,5 +1,6 @@
+import { EventEmitter, IEventEmitter } from "./compat";
 import { IFilesystem, IItem } from "./fs-api";
-import { FileUtil, Path, IEventEmitter } from "./fs-misc";
+import { FileUtil, Path } from "./fs-misc";
 
 interface IItemExt extends IItem {
   relativePath: string;
@@ -28,6 +29,10 @@ export interface ISearchOptionsExt extends ISearchOptions {
   oneitem?: boolean; // only match a single item (implies nowildcard)
 }
 
+class DummyEmitter extends EventEmitter implements IEventEmitter {
+  emit() { return false }
+}
+
 export function search(
   fs: IFilesystem,
   path: string,
@@ -41,11 +46,7 @@ export function search(
 
   // use dummy emitter if not specified
   if (!emitter)
-    emitter = {
-      emit: function (_event) {
-        return false;
-      },
-    };
+    emitter = new DummyEmitter()
 
   // prepare options
   options = options ?? {};

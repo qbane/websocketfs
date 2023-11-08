@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "./compat";
 import { IFilesystem } from "./fs-api";
 import { IDataTarget, Path } from "./fs-misc";
 import { Encoding, IStringDecoder } from "./charsets";
@@ -194,6 +194,8 @@ export class DataTarget extends EventEmitter implements IDataTarget {
   constructor() {
     super();
   }
+
+  on(_: string, _fn: any) { return this }
 
   protected _data(chunk: Buffer): void {
     super.emit("data", chunk);

@@ -1,16 +1,13 @@
+import { IEventEmitter } from "./compat";
 import { IFilesystem, IStats, IItem, FileType } from "./fs-api";
-
-export interface IEventEmitter {
-  emit(event: string, ...args: any[]): boolean;
-}
 
 export interface IDataTarget {
   name?: string;
 
-  on(event: "drain", listener: () => void): NodeJS.EventEmitter;
-  on(event: "error", listener: (err: Error) => void): NodeJS.EventEmitter;
-  on(event: "finish", listener: () => void): NodeJS.EventEmitter;
-  on(event: string, listener: Function): NodeJS.EventEmitter;
+  on(event: "drain", listener: () => void): this;
+  on(event: "error", listener: (err: Error) => void): this;
+  on(event: "finish", listener: () => void): this;
+  on(event: string, listener: Function): this;
 
   write(chunk: Buffer, callback?: () => void): boolean;
   end(): void;
@@ -25,10 +22,10 @@ export interface IDataSource {
   path?: string;
   relativePath?: string;
 
-  on(event: "readable", listener: () => void): NodeJS.EventEmitter;
-  on(event: "error", listener: (err: Error) => void): NodeJS.EventEmitter;
-  on(event: "end", listener: () => void): NodeJS.EventEmitter;
-  on(event: string, listener: Function): NodeJS.EventEmitter;
+  on(event: "readable", listener: () => void): this;
+  on(event: "error", listener: (err: Error) => void): this;
+  on(event: "end", listener: () => void): this;
+  on(event: string, listener: Function): this;
 
   read(): Buffer | null;
   close(): void;

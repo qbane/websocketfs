@@ -1,4 +1,4 @@
-import * as util from "util";
+import util from "node:util";
 
 export interface ILogWriter {
   trace(format: string, ...params: any[]): void;

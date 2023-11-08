@@ -1,3 +1,20 @@
+// use native encoder/decoder for stateless operations:
+// https://github.com/sindresorhus/uint8array-extras/blob/main/index.js
+
+const decoder = new TextDecoder()
+
+export function uint8ArrayToString(value: Uint8Array): string {
+  return decoder.decode(value)
+}
+
+const encoder = new TextEncoder()
+
+export function stringToUint8Array(value: string): Uint8Array {
+  return encoder.encode(value)
+}
+
+// TODO: can switch to TextEncoderStream/TextDecoderStream in the future
+
 export interface IStringEncoder extends StringEncoder {}
 
 export interface IStringDecoder extends StringDecoder {}
@@ -20,12 +37,15 @@ export class Encoding {
     return new StringDecoder();
   }
 
-  encode(value: string, buffer: Buffer, offset: number, end?: number): number {
-    return encodeUTF8(value, buffer, offset, end);
+  encode(value: string, buffer: Uint8Array, offset: number, end?: number): number {
+    const result = encoder.encodeInto(value, buffer.subarray(offset, end));
+    if (result.read! < value.length) return -1;
+    return result.written!;
   }
 
-  decode(buffer: Buffer, offset: number, end?: number): string {
-    return decodeUTF8(buffer, offset, end);
+  decode(buffer: Uint8Array, offset: number, end?: number): string {
+    buffer = buffer.subarray(offset, end);
+    return uint8ArrayToString(buffer);
   }
 }
 
@@ -49,14 +69,14 @@ export class StringEncoder {
     this._value = value;
   }
 
-  read(buffer: Buffer, offset: number, end?: number): number {
+  read(buffer: Uint8Array, offset: number, end?: number): number {
     return encodeUTF8(this._value, buffer, offset, end, <any>this);
   }
 }
 
 export function encodeUTF8(
   value: string,
-  buffer: Buffer,
+  buffer: Uint8Array,
   offset: number,
   end?: number,
   state?: { _code: number; _length: number; _position: number; _done: boolean },
@@ -185,7 +205,7 @@ class StringDecoder {
     return this._text;
   }
 
-  write(buffer: Buffer, offset: number, end: number): void {
+  write(buffer: Uint8Array, offset: number, end: number): void {
     // I think decodeUTF8 mutates this:
     decodeUTF8(buffer, offset, end, <any>this);
     const text = this._text;
@@ -200,7 +220,7 @@ class StringDecoder {
 }
 
 export function decodeUTF8(
-  buffer: Buffer,
+  buffer: Uint8Array,
   offset: number,
   end?: number,
   state?: { _text?: string; _code?: number; _length?: number },

@@ -5,6 +5,17 @@ import Encoding = util.Encoding;
 
 const UTF8 = Encoding.UTF8;
 
+function mergeUint8Arrays(arr: Uint8Array[]): Uint8Array {
+  const len = arr.reduce((n, l) => n + l.length, 0)
+  const ret = new Uint8Array(len)
+  let offset = 0
+  arr.forEach(a => {
+    ret.set(a, offset)
+    offset += a.length
+  })
+  return ret
+}
+
 describe("Encoding Tests", function () {
   beforeAll((done) => {
     done();
@@ -15,33 +26,33 @@ describe("Encoding Tests", function () {
   });
 
   // incomplete chunks
-  const chunk1 = Buffer.from([
+  const chunk1 = new Uint8Array([
     0xc5, 0xbd, 0x6c, 0x75, 0xc5, 0xa5, 0x6f, 0x75, 0xc4, 0x8d, 0x6b, 0xc3,
     0xbd, 0x20, 0x6b, 0xc5,
   ]); // "Žluťoučký k" + incomplete 'ů'
   const text1 = "Žluťoučký k";
-  const chunk2 = Buffer.from([
+  const chunk2 = new Uint8Array([
     0xaf, 0xc5, 0x88, 0x20, 0xc3, 0xba, 0x70, 0xc4, 0x9b, 0x6c, 0x20, 0xc4,
   ]); // incomplete 'ů' + "ň úpěl " + incomplete 'ď'
   const text2 = "ň úpěl ";
-  const chunk3 = Buffer.from([
+  const chunk3 = new Uint8Array([
     0x8f, 0xc3, 0xa1, 0x62, 0x65, 0x6c, 0x73, 0x6b, 0xc3, 0xa9, 0x20, 0xc3,
     0xb3, 0x64, 0x79,
   ]); // incomplete 'ď' + "ábelské ódy"
 
   // mix of two-byte and one-byte characters
-  const chunk4 = Buffer.concat([chunk1, chunk2, chunk3]);
+  const chunk4 = mergeUint8Arrays([chunk1, chunk2, chunk3]);
   const text4 = "Žluťoučký kůň úpěl ďábelské ódy";
 
   // three-byte characters
-  const chunk5 = Buffer.from([
+  const chunk5 = new Uint8Array([
     0xe6, 0xad, 0xbb, 0xe9, 0xa9, 0xac, 0xe5, 0xbd, 0x93, 0xe6, 0xb4, 0xbb,
     0xe9, 0xa9, 0xac, 0xe5, 0x8c, 0xbb,
   ]);
   const text5 = "死马当活马医";
 
   // surrogate pairs
-  const chunk6 = Buffer.from([
+  const chunk6 = new Uint8Array([
     0xf0, 0xa0, 0x9c, 0x8e, 0xf0, 0xa0, 0x9d, 0xb9, 0xf0, 0xa0, 0xb3, 0x8f,
     0xf0, 0xa1, 0x81, 0xbb, 0xf0, 0xa9, 0xb6, 0x98,
   ]);
@@ -49,7 +60,7 @@ describe("Encoding Tests", function () {
 
   const BAD_CHAR = String.fromCharCode(0xfffd); // REPLACEMENT_CHAR
 
-  function assertEqualContents(actual: Buffer, expected: Buffer): void {
+  function assertEqualContents(actual: Uint8Array, expected: Uint8Array): void {
     const len = Math.min(actual.length, expected.length);
     let same = true;
 

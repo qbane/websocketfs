@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "./compat";
 import type { IChannel } from "./channel";
 
 export class StreamChannel extends EventEmitter implements IChannel {

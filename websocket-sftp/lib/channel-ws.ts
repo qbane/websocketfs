@@ -1,205 +1,99 @@
-import http from "http";
-import WebSocket from "ws";
-import Url from "url";
-import type { IChannel } from "./channel";
+import { WebSocketWS, type WS } from "./compat";
+import {
+  AbstractWebSocketChannelFactory,
+  WebSocketChannel,
+  ChannelCreateResult,
+  type ConnectCallback,
+  type MessagePreprocFn,
+  type CloseEventHandler,
+} from "./channel";
 import { SftpError } from "./util";
-import debug from "debug";
+import Url from "node:url";
 
-const log = debug("websocketfs:channel-ws");
-
-export class WebSocketChannelFactory {
-  constructor() {}
-
-  connect(
-    address: string,
-    options,
-    callback: (err: Error, channel?: IChannel) => any,
-  ): void {
-    log("connect", address, options);
-
+export class WebSocketChannelFactoryWS extends AbstractWebSocketChannelFactory<WS> {
+  prepareConnection(address: string, options: Record<string, any>): string {
     const url = Url.parse(address);
-    address = Url.format(url);
-
-    this._connect(address, options, callback);
+    options.username = url.auth || options.username;
+    options.password = options.password || options.passphrase;
+    url.auth = null;
+    return Url.format(url);
   }
 
-  private _connect(
-    address: string,
-    options,
-    callback: (err: Error | null, channel?: IChannel) => any,
-  ): void {
-    log("_connect", address, options);
+  createChannel(address: string, options: Record<string, any>, _credentials: string): ChannelCreateResult<WS> {
+    // TODO: write credentials into options, and then create
+    const webSocket = new WebSocketWS!(address, {...options});
+    const channel = new WebSocketChannelWS(webSocket, true, false);
+    return {webSocket, channel, options};
+  }
 
-    log("create websocket");
-    const ws = new WebSocket(address, options);
-    log("create channel");
-    const channel = new WebSocketChannel(ws, true, false);
-    let didOpen = false;
+  bindEventListeners(result: ChannelCreateResult<WS>, callback: ConnectCallback): void {
+    const { webSocket, options } = result;
+    const channel = result.channel as WebSocketChannelWS;
+    const hasAuthHeader = options.headers?.Authorization != null;
+    let shouldTryAuthNext = false;
 
-    ws.on("open", () => {
-      didOpen = true;
-      log("websocket on open");
+    webSocket.on("open", () => {
       channel._init();
-      callback(null, channel);
+      callback(null);
+    });
+    webSocket.on("unexpected-response", (req, res) => {
+      req.abort();
+      const information = res.headers["sftp-authenticate-info"];
+      let message: string;
+      let code = "X_NOWS";
+      if (res.statusCode === 200) {
+        message = "Unable to upgrade to WebSocket protocol";
+      } else if (res.statusCode === 401) {
+        code = "X_NOAUTH";
+        if (!hasAuthHeader) {
+          for (var i = 0; i < res.rawHeaders.length; i += 2) {
+            if (!res.rawHeaders[i].match(/^WWW-Authenticate$/i)) continue;
+            if (!res.rawHeaders[i + 1].match(/^Basic realm/)) continue;
+
+            shouldTryAuthNext = true;
+            break;
+          }
+          message = "Authentication required";
+        } else {
+          message = "Authentication failed";
+        }
+      } else {
+        message = "Unexpected server response: '" + res.statusCode + " " + res.statusMessage + "'";
+      }
+
+      const err: SftpError = new Error(message) as SftpError;
+      err.code = code;
+      // err.errno = parseInt(code, 10);
+      err.level = "http";
+      if (information) (err as any).info = information;
+
+      channel._close(2, err);
     });
 
-    ws.on(
-      "unexpected-response",
-      (req: http.ClientRequest, res: http.IncomingMessage) => {
-        log("websocket on unexpected-response");
-        // abort the request
-        req.abort();
-
-        let message: string;
-        const code = "X_NOWS";
-        switch (res.statusCode) {
-          case 200:
-            message = "Unable to upgrade to WebSocket protocol";
-            break;
-          default:
-            message =
-              "Unexpected server response: '" +
-              res.statusCode +
-              " " +
-              res.statusMessage +
-              "'";
-            break;
-        }
-
-        const err = <any>new Error(message);
-        err.code = err.errno = code;
-        err.level = "http";
-
-        channel._close(2, err);
-      },
-    );
-
-    channel.on("close", (err) => {
-      log("websocket close", err);
-      if (didOpen) {
-        // makes no sense to call callback at this point, since we already
-        // did with the successful open above!
-        return;
+    channel.on("close", (err: SftpError | null) => {
+      if (err == null) {
+        err = new Error("Connection closed");
       }
-      callback(err ?? new Error("Connection closed"));
+
+      if (err.code === "X_NOAUTH" && shouldTryAuthNext && (typeof options.authenticate === "function")) {
+        // TODO
+      }
+
+      callback(err);
     });
   }
 
-  bind(ws: WebSocket): IChannel {
-    if (ws.readyState != WebSocket.OPEN) {
-      throw new Error("WebSocket is not open");
-    }
-    return new WebSocketChannel(ws, true, true);
+  createBoundChannel(ws: WS) {
+    return new WebSocketChannelWS(ws, true, true);
   }
 }
 
-/*
-TODO: Weirdness warning!  This WebSocketChannel is NOT an event emitter.  When
-something does .on(event) it steals the listener.  It's very weird.
-*/
-
-class WebSocketChannel implements IChannel {
-  private ws: WebSocket;
-  private options: any;
-  private established: boolean;
-  private closed: boolean;
-  private onclose: ((err: Error) => void) | null;
-
-  on(event: string, listener): IChannel {
-    if (typeof listener !== "function")
-      throw new Error("Listener must be a function");
-
-    switch (event) {
-      case "message":
-        this.onmessage(listener);
-        break;
-      case "close":
-        this.onclose = listener;
-        break;
-      default:
-        break;
-    }
-    return this;
-  }
-
-  private onmessage(listener: (packet: Buffer) => void): void {
-    this.ws.on("message", (data, isBinary: boolean) => {
-      //log("received message", { data, isBinary });
-      if (this.closed) {
-        return;
-      }
-
-      let packet: Buffer;
-      if (isBinary) {
-        packet = <Buffer>data;
-      } else {
-        const err = new SftpError(
-          "Connection failed due to unsupported packet type -- all messages must be binary",
-          { code: "EFAILURE", errno: -38, level: "ws" },
-        );
-        this._close(1, err);
-        return;
-      }
-
-      listener(packet);
-    });
-  }
-
-  constructor(ws: WebSocket, binary: boolean, established: boolean) {
-    this.ws = ws;
+class WebSocketChannelWS extends WebSocketChannel<WS> {
+  constructor(ws: WS, binary: boolean, established: boolean) {
+    super(ws, binary, established);
     this.options = { binary };
-    this.established = established;
 
-    ws.on("close", (reason, description) => {
-      log("WebSocketChannel: ws.on.close", reason);
-      let message = "Connection failed";
-      let code = "EFAILURE";
-      switch (reason) {
-        case 1000:
-          return this._close(reason, null);
-        case 1001:
-          message = "Endpoint is going away";
-          code = "X_GOINGAWAY";
-          break;
-        case 1002:
-          message = "Protocol error";
-          code = "EPROTOTYPE";
-          break;
-        case 1006:
-          message = "Connection aborted";
-          code = "ECONNABORTED";
-          break;
-        case 1007:
-          message = "Invalid message";
-          break;
-        case 1008:
-          message = "Prohibited message";
-          break;
-        case 1009:
-          message = "Message too large";
-          break;
-        case 1010:
-          message = "Connection terminated";
-          code = "ECONNRESET";
-          break;
-        case 1011:
-          message = description;
-          code = "ECONNRESET";
-          break;
-        case 1015:
-          message = "Unable to negotiate secure connection";
-          break;
-      }
-
-      const err = <any>new Error(message);
-      err.code = err.errno = code;
-      err.level = "ws";
-      err.nativeCode = reason;
-
-      this._close(reason, err);
-    });
-
-    ws.on("error", (err) => {
+    ws.on("error", (err: any) => {
       const code = err.code;
 
       switch (code) {
@@ -222,57 +116,32 @@ class WebSocketChannel implements IChannel {
     });
   }
 
-  _init(): void {
-    this.onclose = null;
-    this.established = true;
-  }
+  protected bindMessageListener(preproc: MessagePreprocFn, listener: (packet: Uint8Array) => void): void {
+    this.ws.on("message", (data: ArrayBuffer, isBinary: boolean) => {
+      if (preproc(data, isBinary) === false) return;
 
-  _close(_kind: number, err: Error | any): void {
-    if (this.closed) return;
-    const onclose = this.onclose;
-    this.close();
-
-    if (!err && !this.established) {
-      err = new Error("Connection refused");
-      err.code = err.errno = "ECONNREFUSED";
-    }
-
-    if (typeof onclose === "function") {
-      onclose(err);
-    } else {
-      if (err) {
-        throw err;
+      let packet: Uint8Array;
+      try {
+        packet = WebSocketChannel.validateMessage(data, isBinary);
+      } catch (err) {
+        this._close(1, err);
+        return;
       }
-    }
+      listener(packet);
+    });
   }
 
-  close(reason?: number, description?: string): void {
-    if (this.closed) return;
-    this.closed = true;
-
-    this.onclose = null;
-    // @ts-ignore
-    this.onmessage = null;
-
-    if (!reason) reason = 1000;
-    try {
-      this.ws.close(reason, description);
-    } catch (err) {
-      // ignore errors - we are shuting down the socket anyway
-    }
+  doSend(payload: Uint8Array): void {
+    this.ws.send(payload, this.options, (err) => {
+      if (err) this._close(3, err);
+    });
   }
 
-  send(packet: Buffer): void {
-    if (this.closed) return;
+  protected bindCloseListener(handler: CloseEventHandler): void {
+    this.ws.addEventListener("close", handler);
+  }
 
-    try {
-      this.ws.send(packet, this.options, (err) => {
-        if (err) {
-          this._close(3, err);
-        }
-      });
-    } catch (err) {
-      this._close(2, err);
-    }
+  doClose(reason: number, description: Buffer): void {
+    this.ws.close(reason, description);
   }
 }

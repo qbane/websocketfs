@@ -1,6 +1,7 @@
-import http from "http";
-import path from "path";
-import events from "events";
+import http from "node:http";
+import type { IncomingMessage } from "node:http";
+import path from "node:path";
+import { EventEmitter, WS } from "./compat";
 import { SftpClient, ISftpClientEvents } from "./sftp-client";
 import { SftpServerSession } from "./sftp-server";
 import { SafeFilesystem } from "./fs-safe";
@@ -8,16 +9,18 @@ import * as local from "./fs-local";
 import * as api from "./fs-api";
 import { Task } from "./fs-plus";
 import { IChannel as IChannel0 } from "./channel";
-import { WebSocketChannelFactory } from "./channel-ws";
-import * as channel_ws from "./channel-ws";
+import { WebSocketChannelFactoryWS } from "./channel-ws";
+import { WebSocketChannelFactoryWeb } from "./channel-web";
 import * as channel_stream from "./channel-stream";
 import * as util from "./util";
-import {
-  WebSocketServer,
-  IServerOptions as WebSocketIServerOptions,
-} from "ws";
-import type { WebSocket } from "ws";
+
+import { BROWSER } from "esm-env";
+
+const WebSocketChannelFactory = BROWSER ? WebSocketChannelFactoryWeb : WebSocketChannelFactoryWS;
+
 import debug from "debug";
+
+type WebSocketIServerOptions = WS.ServerOptions
 
 const log = debug("websocketfs-sftp:sftp");
 
@@ -41,17 +44,15 @@ export interface IClientOptions {
 }
 
 export class Client extends SftpClient implements ISftpClientEvents<Client> {
+  // hint: In Node's setup, a local fs can be passed to the parent class
+  // constructor(localFs?: local.LocalFilesystem) {}
+
   on(event: string, listener) {
     return super.on(event, listener);
   }
 
   once(event: string, listener) {
-    return super.on(event, listener);
-  }
-
-  constructor() {
-    const localFs = new local.LocalFilesystem();
-    super(localFs);
+    return super.once(event, listener);
   }
 
   connect(
@@ -71,8 +72,6 @@ export class Client extends SftpClient implements ISftpClientEvents<Client> {
       if (options.protocol == null) {
         options.protocol = "sftp";
       }
-
-      this._promise = options.promise;
 
       log("Client.connect: connect factory...");
       const factory = new WebSocketChannelFactory();
@@ -98,7 +97,7 @@ export interface IChannel extends IChannel0 {}
 
 export module Internals {
   export const StreamChannel = channel_stream.StreamChannel;
-  export const WebSocketChannelFactory = channel_ws.WebSocketChannelFactory;
+  export const WebSocketChannelFactory = WebSocketChannelFactoryWS;
   export const LogHelper = util.LogHelper;
 }
 
@@ -114,6 +113,9 @@ export interface ISessionInfo {
   readOnly?: boolean;
   hideUidGid?: boolean;
 }
+
+// FIXME: Split the server and client for a client-only (i.e., web-friendly) build
+import { WebSocketServer } from "ws";
 
 export interface IServerOptions extends WebSocketIServerOptions {
   filesystem?: IFilesystem;
@@ -137,10 +139,12 @@ export interface IServerOptions extends WebSocketIServerOptions {
   clientTracking?: boolean;
 }
 
-export class Server extends events.EventEmitter {
-  private _wss: WebSocketServer;
+export class Server extends EventEmitter {
+  private _wss?: WebSocketServer;
   private _sessionInfo: IServerOptions;
   private _log: ILogWriter;
+
+  static upgradeReqs: WeakMap<WS, IncomingMessage> = new WeakMap();
 
   constructor(options?: IServerOptions) {
     super();
@@ -153,7 +157,8 @@ export class Server extends events.EventEmitter {
     this._log = util.LogHelper.toLogWriter(options.log);
     const { noServer, wss } = options;
 
-    serverOptions.handleProtocols = this.handleProtocols;
+    // FIXME
+    (serverOptions.handleProtocols as any) = this.handleProtocols;
 
     for (const option in options) {
       if (options.hasOwnProperty(option)) {
@@ -192,9 +197,9 @@ export class Server extends events.EventEmitter {
       log("Creating WebSocketServer");
       this._wss = wss ?? new WebSocketServer(serverOptions);
       this._wss.on("error", console.error);
-      this._wss.on("connection", (ws, upgradeReq) => {
+      this._wss.on("connection", (ws: WS, upgradeReq) => {
         log("WebSocketServer received a new connection");
-        ws.upgradeReq = upgradeReq;
+        Server.upgradeReqs.set(ws, upgradeReq);
         this.accept(ws, (err, _session) => {
           if (err) {
             log("WebSocketServer: error while accepting connection", err);
@@ -248,7 +253,7 @@ export class Server extends events.EventEmitter {
   }
 
   accept(
-    ws: WebSocket,
+    ws: WS,
     callback?: (err: Error | null, session?: SftpServerSession) => void,
   ): void {
     try {
@@ -270,9 +275,9 @@ export class Server extends events.EventEmitter {
       );
 
       const factory = new WebSocketChannelFactory();
-      const channel = factory.bind(ws);
+      const channel = factory.bind(ws as any);
 
-      const socket = ws.upgradeReq.connection;
+      const socket = Server.upgradeReqs.get(ws)!.connection;
       const info = {
         clientAddress: socket.remoteAddress,
         clientPort: socket.remotePort,

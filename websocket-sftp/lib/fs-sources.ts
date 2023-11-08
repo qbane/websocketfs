@@ -1,6 +1,6 @@
-import { EventEmitter } from "events";
+import { IEventEmitter, EventEmitter } from "./compat";
 import { IFilesystem, IStats } from "./fs-api";
-import { IDataSource, IEventEmitter, Path } from "./fs-misc";
+import { IDataSource, Path } from "./fs-misc";
 import { search } from "./fs-glob";
 
 interface IChunk extends Buffer {

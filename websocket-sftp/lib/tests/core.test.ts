@@ -26,23 +26,25 @@ async function initTmp() {
   }
 }
 
-let server, client, port;
-function initClient(cb) {
-  client = new Client();
+let server: Server, client: Client, port: number;
+function initClient(done) {
+  client = new Client(null);
 
-  client.connect(`ws://localhost:${port}`, {});
+  client.connect(`ws://localhost:${port}`, {}, (err) => {
+    done(err);
+  });
 
   client.on("error", (err) => {
     if (err.message == "Simulated callback error") {
       return;
     }
-    cb(err);
+    done(err);
     // jest seems to swallow uncaught errors, so we make them very explicit!
     console.error("Uncaught error:", err);
     process.exit(255);
   });
 
-  client.on("ready", cb);
+  client.on("ready", () => done(null));
 }
 
 function patchIt() {
@@ -80,18 +82,26 @@ beforeAll(async () => {
   patchIt();
   await initTmp();
   port = await getPort();
+
   server = new Server({
     port,
     virtualRoot: tmp,
   });
+  server.on("error", (err: any) => {
+    // a test must fail in case of any internal errors occurring in a server
+    throw err
+  })
+
   await new Promise<void>((resolve, reject) => {
-    initClient((err: Error | null) => err ? reject(err) : resolve())
+    initClient((err: Error | null) => {
+      return err ? reject(err) : resolve()
+    })
   })
 });
 
 afterAll(async () => {
-  client.end();
-  server.end();
+  if (client) client.end();
+  if (server) server.end();
   await tmpdir?.cleanup();
 });
 

@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "node:fs";
 import { IFilesystem, IItem, IStats, RenameFlags } from "./fs-api";
 import { FileUtil, Path } from "./fs-misc";
 // note that this is in node.js v 18.15 and later

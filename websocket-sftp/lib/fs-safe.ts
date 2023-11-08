@@ -6,10 +6,10 @@ It would be nice to rename things appropriately.
 descriptor is a different notion in POSIX file systems.
 */
 
-import Path from "path";
+import Path from "node:path";
 import { IFilesystem, IItem, IStats, RenameFlags } from "./fs-api";
 import { FileUtil } from "./fs-misc";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { MAX_WRITE_BLOCK_LENGTH } from "./sftp-client";
 import debug from "debug";
 

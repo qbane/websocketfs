@@ -1,11 +1,12 @@
+import { stringToUint8Array, uint8ArrayToString } from "./charsets";
 import { SftpPacketType } from "./sftp-enums";
-import { encodeUTF8 } from "./charsets";
+// import { encodeUTF8 } from "./charsets";
 
 export class SftpPacket {
   type: SftpPacketType | string | null = null;
   id: number | null = null;
 
-  buffer: Buffer;
+  buffer: Uint8Array;
   position: number;
   length: number;
 
@@ -22,14 +23,11 @@ export class SftpPacket {
   }
 
   resize(size: number): void {
-    const buffer = Buffer.alloc(size);
-    this.buffer.copy(buffer);
-    this.buffer = buffer;
-    this.length = buffer.length;
+    this.buffer = this.buffer.subarray(0, size);
   }
 
   static isBuffer(obj: any): boolean {
-    return Buffer.isBuffer(obj);
+    return obj && obj.buffer instanceof ArrayBuffer && typeof obj.byteLength !== "undefined";
   }
 
   static toString(packetType: SftpPacketType | string): string {
@@ -96,7 +94,7 @@ export class SftpPacket {
 }
 
 export class SftpPacketReader extends SftpPacket {
-  constructor(buffer: Buffer, raw?: boolean) {
+  constructor(buffer: Uint8Array, raw?: boolean) {
     super();
 
     this.buffer = buffer;
@@ -128,35 +126,37 @@ export class SftpPacketReader extends SftpPacket {
 
   readByte(): number {
     this.check(1);
-    const value = this.buffer.readUInt8(this.position++);
+    const value = this.buffer[this.position++] & 0xFF;
     return value;
   }
 
   readInt16(): number {
-    this.check(2);
-    const value = this.buffer.readInt16BE(this.position);
-    this.position += 2;
+    let value = this.readUInt16();
+    if (value & 0x8000) value -= 0x10000;
     return value;
   }
 
   readUInt16(): number {
     this.check(2);
-    const value = this.buffer.readUInt16BE(this.position);
-    this.position += 2;
+    let value = 0;
+    value |= (this.buffer[this.position++] & 0xFF) << 8;
+    value |= (this.buffer[this.position++] & 0xFF);
     return value;
   }
 
   readInt32(): number {
-    this.check(4);
-    const value = this.buffer.readInt32BE(this.position);
-    this.position += 4;
+    let value = this.readUInt32();
+    if (value & 0x80000000) value -= 0x100000000;
     return value;
   }
 
   readUInt32(): number {
     this.check(4);
-    const value = this.buffer.readUInt32BE(this.position);
-    this.position += 4;
+    let value = 0;
+    value |= (this.buffer[this.position++] & 0xFF) << 24;
+    value |= (this.buffer[this.position++] & 0xFF) << 16;
+    value |= (this.buffer[this.position++] & 0xFF) << 8;
+    value |= (this.buffer[this.position++] & 0xFF);
     return value;
   }
 
@@ -179,7 +179,8 @@ export class SftpPacketReader extends SftpPacket {
     const length = this.readUInt32();
     this.check(length);
     const end = this.position + length;
-    const value = this.buffer.toString("utf8", this.position, end);
+    const slice = this.buffer.subarray(this.position, end);
+    const value = uint8ArrayToString(slice);
     this.position = end;
     return value;
   }
@@ -192,19 +193,20 @@ export class SftpPacketReader extends SftpPacket {
     this.position = end;
   }
 
-  readData(clone: boolean): Buffer {
+  readData(clone: boolean): Uint8Array {
     const length = this.readUInt32();
     this.check(length);
 
     const start = this.position;
     const end = start + length;
     this.position = end;
+    const view = this.buffer.subarray(start, end);
     if (clone) {
-      const buffer = Buffer.alloc(length);
-      this.buffer.copy(buffer, 0, start, end);
+      const buffer = new Uint8Array(length);
+      buffer.set(view, 0);
       return buffer;
     } else {
-      return this.buffer.slice(start, end);
+      return view;
     }
   }
 
@@ -246,28 +248,29 @@ export class SftpPacketWriter extends SftpPacket {
     }
   }
 
-  finish(): Buffer {
+  finish(): Uint8Array {
     const length = this.position;
     this.position = 0;
-    this.buffer.writeInt32BE(length - 4, 0);
-    return this.buffer.slice(0, length);
+    this.writeInt32(length - 4);
+    return this.buffer.subarray(0, length);
   }
 
   writeByte(value: number): void {
     this.check(1);
-    this.buffer.writeUInt8(value, this.position++);
+    this.buffer[this.position++] = value & 0xFF;
   }
 
   writeInt32(value: number): void {
     this.check(4);
-    this.buffer.writeInt32BE(value, this.position);
-    this.position += 4;
+    this.buffer[this.position++] = (value >> 24) & 0xFF;
+    this.buffer[this.position++] = (value >> 16) & 0xFF;
+    this.buffer[this.position++] = (value >> 8) & 0xFF;
+    this.buffer[this.position++] = value & 0xFF;
   }
 
+  // @deprecated
   writeUInt32(value: number): void {
-    this.check(4);
-    this.buffer.writeUInt32BE(value, this.position);
-    this.position += 4;
+    return this.writeInt32(value);
   }
 
   writeInt64(value: number): void {
@@ -277,11 +280,9 @@ export class SftpPacketWriter extends SftpPacket {
     this.writeInt32(lo);
   }
 
+  // @deprecated
   writeUInt64(value: number): void {
-    const hi = (value / 0x100000000) | 0;
-    const lo = (value & 0xffffffff) | 0;
-    this.writeUInt32(hi);
-    this.writeUInt32(lo);
+    return this.writeInt64(value);
   }
 
   writeString(value: string): void {
@@ -289,7 +290,10 @@ export class SftpPacketWriter extends SftpPacket {
     const offset = this.position;
     this.writeInt32(0); // will get overwritten later
 
-    const bytesWritten = encodeUTF8(value, this.buffer, this.position);
+    const encoded = stringToUint8Array(value);
+    const bytesWritten = encoded.length;
+    this.buffer.set(encoded, this.position);
+
     if (bytesWritten < 0) {
       console.warn("writeString: Not enough space in the buffer");
       throw new Error("Not enough space in the buffer");
@@ -297,20 +301,20 @@ export class SftpPacketWriter extends SftpPacket {
 
     // write number of bytes and seek back to the end
     this.position = offset;
-    this.writeUInt32(bytesWritten);
+    this.writeInt32(bytesWritten);
     this.position += bytesWritten;
   }
 
-  writeData(data: Buffer, start?: number, end?: number): void {
+  writeData(data: Uint8Array, start?: number, end?: number): void {
     if (start != null) {
       data = data.slice(start, end);
     }
 
     const length = data.length;
-    this.writeUInt32(length);
+    this.writeInt32(length);
 
     this.check(length);
-    data.copy(this.buffer, this.position, 0, length);
+    this.buffer.set(data, this.position);
     this.position += length;
   }
 }

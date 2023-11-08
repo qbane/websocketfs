@@ -1,3 +1,4 @@
+import { IEventEmitter } from "./compat";
 import { SftpPacket, SftpPacketWriter, SftpPacketReader } from "./sftp-packet";
 import {
   SftpAttributes,
@@ -183,7 +184,7 @@ export class SftpServerSession {
   constructor(
     channel: IChannel,
     fs: SafeFilesystem,
-    emitter: NodeJS.EventEmitter,
+    emitter: IEventEmitter,
     oldlog: ILogWriter,
     meta: any,
   ) {
@@ -681,7 +682,8 @@ export class SftpServerSession {
             if (count == 0) {
               this.sendStatus(response, SftpStatusCode.EOF, "EOF");
             } else {
-              response.buffer.writeInt32BE(count, offset);
+              const view = new DataView(response.buffer.buffer);
+              view.setInt32(offset, count, false);
               this.send(response);
             }
           };
