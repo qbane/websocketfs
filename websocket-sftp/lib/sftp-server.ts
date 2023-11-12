@@ -24,7 +24,7 @@ class SftpResponse extends SftpPacketWriter {
 }
 
 class SftpRequest extends SftpPacketReader {
-  constructor(buffer: Buffer) {
+  constructor(buffer: Uint8Array) {
     super(buffer);
   }
 
@@ -441,8 +441,8 @@ export class SftpServerSession {
     delete this._fs;
   }
 
-  _process(data: Buffer): void {
-    const request = new SftpRequest(data);
+  _process(data: ArrayBuffer): void {
+    const request = new SftpRequest(new Uint8Array(data));
 
     if (this._debug) {
       const meta = {};

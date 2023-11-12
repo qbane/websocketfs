@@ -89,7 +89,8 @@ beforeAll(async () => {
   });
   server.on("error", (err: any) => {
     // a test must fail in case of any internal errors occurring in a server
-    throw err
+    console.error(err);
+    process.exit(254);
   })
 
   await new Promise<void>((resolve, reject) => {

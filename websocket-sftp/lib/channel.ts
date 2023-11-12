@@ -2,7 +2,7 @@ import debug from "debug";
 import { IWebSocket, type WS } from "./compat";
 import { SftpError } from "./util";
 
-const log = debug("websocketfs:channel-ws");
+const log = debug("websocketfs:channel");
 
 export interface ChannelCreateResult<T extends IWebSocket> {
   webSocket: T;
@@ -122,10 +122,10 @@ export abstract class WebSocketChannel<T extends IWebSocket> implements IChannel
     return this;
   }
 
-  protected static validateMessage(data: any, isBinary: boolean): Uint8Array {
+  protected static validateMessage(data: any, isBinary: boolean): ArrayBuffer {
     if (isBinary) {
       if (data instanceof ArrayBuffer) {
-        return new Uint8Array(data);
+        return data;
       }
       throw new SftpError("Received a binary message with unsupported data type.");
     } else {
@@ -137,14 +137,14 @@ export abstract class WebSocketChannel<T extends IWebSocket> implements IChannel
   }
 
   private _bindMessageListener(listener: any): void {
-    const preproc: MessagePreprocFn = (data: Uint8Array, isBinary: boolean) => {
+    const preproc: MessagePreprocFn = (data: ArrayBuffer, isBinary: boolean) => {
       if (this.closed) return false;
       log("received message", { data, isBinary });
     };
     this.bindMessageListener(preproc, listener);
   }
 
-  protected abstract bindMessageListener(preproc: MessagePreprocFn, listener: (packet: Uint8Array) => void): void;
+  protected abstract bindMessageListener(preproc: MessagePreprocFn, listener: (data: ArrayBuffer) => void): void;
 
   private _bindCloseListener() {
     this.bindCloseListener(evt => {

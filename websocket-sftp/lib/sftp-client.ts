@@ -330,9 +330,9 @@ class SftpClientCore implements IFilesystem {
       }
 
       if (response.type == SftpPacketType.VERSION) {
-        log("Received version response", meta);
+        log("[%d] - Received version response %o", this._sessionId, meta);
       } else {
-        log("Received version response", meta, response.id);
+        log("[%d] #%d - Received response %o", this._sessionId, response.id, meta);
       }
     }
 

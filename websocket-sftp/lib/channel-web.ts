@@ -53,20 +53,20 @@ class WebSocketChannelWeb extends WebSocketChannel<WebSocket> {
     });
   }
 
-  protected bindMessageListener(preproc: MessagePreprocFn, listener: (packet: Uint8Array) => void): void {
+  protected bindMessageListener(preproc: MessagePreprocFn, listener: (data: ArrayBuffer) => void): void {
     this.ws.addEventListener("message", (event: MessageEvent<string | ArrayBuffer>) => {
       let data = event.data;
       const isBinary = data instanceof ArrayBuffer;
       if (preproc(data, isBinary) === false) return;
 
-      let packet: Uint8Array;
+      let binData: ArrayBuffer;
       try {
-        packet = WebSocketChannel.validateMessage(data, isBinary);
+        binData = WebSocketChannel.validateMessage(data, isBinary);
       } catch (err) {
         this._close(1, err);
         return;
       }
-      listener(packet);
+      listener(binData);
     })
   }
 
