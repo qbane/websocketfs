@@ -200,6 +200,7 @@ export class Server extends EventEmitter {
       this._wss.on("connection", (ws: WS, upgradeReq) => {
         log("WebSocketServer received a new connection");
         Server.upgradeReqs.set(ws, upgradeReq);
+        ws.binaryType = "arraybuffer";
         this.accept(ws, (err, _session) => {
           if (err) {
             log("WebSocketServer: error while accepting connection", err);

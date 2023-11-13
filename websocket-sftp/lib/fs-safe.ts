@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import { MAX_WRITE_BLOCK_LENGTH } from "./sftp-client";
 import debug from "debug";
 
-const log = debug("websocketfs:fs-fsafe");
+const log = debug("websocketfs:fs-safe");
 
 class HandleInfo {
   safe: number;

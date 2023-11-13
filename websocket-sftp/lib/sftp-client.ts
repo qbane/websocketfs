@@ -8,7 +8,7 @@ import { IChannel } from "./channel";
 import { ILogWriter, LogHelper, LogLevel } from "./util";
 import debug from "debug";
 
-const log = debug("websocket-sftp:sftp-client");
+const log = debug("websocketfs:sftp-client");
 import { SftpVfsStats } from "./sftp-misc";
 
 export const MAX_WRITE_BLOCK_LENGTH = 1024 * 1024;

@@ -77,7 +77,6 @@ export abstract class AbstractWebSocketChannelFactory<T extends IWebSocket> {
     if (ws.readyState != ws.OPEN) {
       throw new Error("WebSocket is not open");
     }
-    ws.binaryType = "arraybuffer";
     return this.createBoundChannel(ws);
   }
 
