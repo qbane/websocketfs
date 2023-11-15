@@ -219,7 +219,7 @@ export class SftpPacketReader extends SftpPacket {
 export class SftpPacketWriter extends SftpPacket {
   constructor(length: number) {
     super();
-    this.buffer = Buffer.alloc(length);
+    this.buffer = new Uint8Array(length);
     this.position = 0;
     this.length = length;
   }

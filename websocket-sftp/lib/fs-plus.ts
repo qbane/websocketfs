@@ -714,7 +714,7 @@ export class FilesystemPlus extends EventEmitter implements IFilesystem {
           if (error) {
             if (emitter) {
               let err = error;
-              if (task.listenerCount("error") > 0) {
+              if (emitter && emitter.listenerCount("error") > 0) {
                 emitter.emit("error", err);
                 err = null;
               }
@@ -743,7 +743,7 @@ export class FilesystemPlus extends EventEmitter implements IFilesystem {
                   arguments[0] = "success";
                   emitter.emit.apply(task, arguments);
 
-                  if (task.listenerCount("finish") > 0) {
+                  if (emitter && emitter.listenerCount("finish") > 0) {
                     arguments[0] = "finish";
                     Array.prototype.splice.call(arguments, 1, 0, null);
                     emitter.emit.apply(task, arguments);
