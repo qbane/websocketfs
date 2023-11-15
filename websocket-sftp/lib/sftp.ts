@@ -22,7 +22,7 @@ import debug from "debug";
 
 type WebSocketIServerOptions = WS.ServerOptions
 
-const log = debug("websocketfs-sftp:sftp");
+const log = debug("websocketfs:sftp");
 
 export interface IStats extends api.IStats {}
 export interface IItem extends api.IItem {}

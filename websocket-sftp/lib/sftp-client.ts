@@ -313,9 +313,10 @@ class SftpClientCore implements IFilesystem {
     );
   }
 
-  _process(packet: Buffer): void {
-    this._bytesReceived += packet.length;
-    const response = <SftpResponse>new SftpPacketReader(packet);
+  _process(packet: ArrayBuffer): void {
+    const buf = new Uint8Array(packet);
+    this._bytesReceived += buf.length;
+    const response = <SftpResponse>new SftpPacketReader(buf);
 
     if (log.enabled) {
       const meta: { [key: string]: any } = {};
