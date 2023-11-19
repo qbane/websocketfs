@@ -105,6 +105,14 @@ class SftpClientCore implements IFilesystem {
   private _bytesReceived: number;
   private _bytesSent: number;
 
+  // Some proxies (e.g., websocat) does not read into the underlying data;
+  // they may emit multiple packets in a single message frame.
+  // For interoperability, we allow that a packet can contain more than one
+  // payload, and process these packets accordingly.
+  // Note that a packet can never cross the boundary regardless of whether
+  // this setting is enabled.
+  _allowBatchedMessages: boolean;
+
   private getRequest(type: SftpPacketType | string): SftpPacketWriter {
     const request = new SftpPacketWriter(this._maxWriteBlockLength + 1024);
 
@@ -146,6 +154,8 @@ class SftpClientCore implements IFilesystem {
 
     this._bytesReceived = 0;
     this._bytesSent = 0;
+
+    this._allowBatchedMessages = false;
   }
 
   getChannelStats(): {} {
@@ -313,9 +323,27 @@ class SftpClientCore implements IFilesystem {
     );
   }
 
-  _process(packet: Buffer): void {
-    this._bytesReceived += packet.length;
-    const response = <SftpResponse>new SftpPacketReader(packet);
+  _process(packet: ArrayBuffer): void {
+    let _buf: Uint8Array, remaining: ArrayBuffer | null = null;
+
+    if (this._allowBatchedMessages) {
+      const view = new DataView(packet);
+      const claimedSize = view.getInt32(0, false) + 4;
+      if (claimedSize < packet.byteLength) {
+        log('Split a buffer of %d bytes at position %d', packet.byteLength, claimedSize);
+        _buf = new Uint8Array(packet, 0, claimedSize);
+        remaining = packet.slice(claimedSize);
+      }
+      // if the size is not the same, just let the error happen
+    }
+
+    if (remaining == null) {
+      _buf = new Uint8Array(packet);
+    }
+
+    const buf: Uint8Array = _buf!;
+    this._bytesReceived += buf.length;
+    const response = <SftpResponse>new SftpPacketReader(buf);
 
     if (log.enabled) {
       const meta: { [key: string]: any } = {};
@@ -346,6 +374,11 @@ class SftpClientCore implements IFilesystem {
     delete this._requests[response.id];
     response.info = request.info;
     request.responseParser.call(this, response, request.callback);
+
+    // FIXME: this allows unbounded stack usage
+    if (remaining != null) {
+      this._process(remaining!);
+    }
   }
 
   end(): void {
