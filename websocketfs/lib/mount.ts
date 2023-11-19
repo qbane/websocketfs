@@ -18,9 +18,42 @@ interface Options {
   cacheStatTimeout?: number;
   cacheDirTimeout?: number;
   cacheLinkTimeout?: number;
-  // write out to path all files explicitly read in the last timeout seconds.
-  // path is updated once every update seconds.
-  readTracking?: { path: string; timeout?: number; update?: number };
+
+  // Read Tracking
+  // Write out filenames of files that were explicitly read to readTrackingFile
+  // terminated by NULL, like the --null option to tar expects:
+  //    readTrackingFile
+  // A file is added no more than once until readTrackingFile is deleted.  Delete
+  // readTrackingFile to reset the processs.
+  // The leading slash is removed from the filenames, so they are relative to
+  // the mount point.
+  readTrackingFile?: string;
+  // exclude given top level directories from tracking, e.g.,
+  //    ['scratch', 'tmp']
+  // would exclude scratch and tmp.  We also allow ['.*'] to mean "exclude
+  // all top level hidden directories".
+  readTrackingExclude?: string[];
+
+  // Metadata
+  // If the metadataFile file path is given, we poll it for modification every few seconds.
+  // If it changes, the file is read into memory and used to provide ALL directory and
+  // file stat information until the file is updated.  If it is deleted, caching stops.
+  // The format of metadataFile is as follows with a NULL character beetween the filename and the metadata.
+  //    [filename-relative-to-mount-point-no-leading-/.]\0[mtime in seconds] [atime in seconds] [number of 512-byte blocks] [size] [symbolic mode string]\0\0
+  // This file is *not* assumed to be sorted (it's a 1-line file, so hard to sort in unix anyways).
+  // Here all of mtime, atime, blocks, size are decimal numbers, which may have a fractional part,
+  // and mode is a string like in ls.  E.g., this find command does it (ignoring hidden files).
+  // Y2K alert -- note the %.10T truncates times to integers, and will I guess fail a few hundred years from now.
+  //
+  //       mkdir -p /tmp/meta; find * -printf "%p\0%.10T@ %.10A@ %b %s %M\0\0" | lz4 > .meta.lz4 && mv .meta.lz4  /tmp/meta/meta.lz4
+  //
+  // PATCHES: (This does not exist yet!) If metadataFile ends in .lz4 it is assumed to be lz4 compressed and gets automatically decompressed.
+  // If there are files metadataFile.patch.[n] (with n an integer), then they are diff-match-patch patches
+  // in the internal cocalc compressed format, that should be applied in order to metadataFile to get
+  // the current version of the file.  This is needed to dramatically reduce bandwidth usage.
+  // The patch files can optionally end in .lz4.
+  metadataFile?: string;
+
   // Any stat to a path that starts with hidePath gets an instant
   // response that the the path does not exists, instead of having to
   // possibly use sftp. This is absolute according to the mount, i.e.,
@@ -42,7 +75,9 @@ export default async function mount(
     cacheStatTimeout,
     cacheDirTimeout,
     cacheLinkTimeout,
-    readTracking,
+    readTrackingFile,
+    readTrackingExclude,
+    metadataFile,
     hidePath,
   } = opts;
 
@@ -52,7 +87,9 @@ export default async function mount(
     cacheStatTimeout,
     cacheDirTimeout,
     cacheLinkTimeout,
-    readTracking,
+    readTrackingFile,
+    readTrackingExclude,
+    metadataFile,
     hidePath,
   });
   await client.connect(connectOptions);
