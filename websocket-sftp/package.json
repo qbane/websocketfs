@@ -24,7 +24,7 @@
     "package.json"
   ],
   "engines": {
-    "node": ">=0.16.0"
+    "node": ">=18.0.0"
   },
   "author": {
     "name": "William Stein (SageMath, Inc.)",
@@ -64,6 +64,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/debug": "^4.1.12",
     "@types/jest": "^29.5.3",
     "@types/node": "^20.5.0",
     "@types/ws": "^8.5.9",
